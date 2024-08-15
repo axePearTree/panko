@@ -1,3 +1,6 @@
 [workspace]
 
 members = ["panko", "panko-sdl2"]
+
+[workspace.dependencies]
+panko = { path = "./panko" }
