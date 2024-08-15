@@ -1,0 +1,8 @@
+[package]
+name = "panko-sdl2"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+panko = { path = "../panko" }
+sdl2-sys = { version = "0.37.0", features = ["image", "ttf", "mixer"] }
