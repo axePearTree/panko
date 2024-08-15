@@ -4,6 +4,7 @@ extern crate alloc;
 
 pub mod backend;
 pub mod canvas;
+pub mod font;
 pub mod input;
 pub mod texture;
 pub mod types;
@@ -22,7 +23,7 @@ pub type Result<T = ()> = core::result::Result<T, String>;
 pub(crate) type BackendRef = Rc<RefCell<dyn Backend>>;
 pub(crate) type BackendWeakRef = Weak<RefCell<dyn Backend>>;
 
-pub trait Game {
+pub trait Application {
     fn update(&mut self, context: &mut Context, delta_ms: u64) -> Result;
     fn fixed_update(&mut self, context: &mut Context, fixed_ms: u64) -> Result;
     fn draw(&mut self, canvas: &mut Canvas, alpha_secs: f32) -> Result;
@@ -60,6 +61,7 @@ impl Context {
     }
 
     fn refresh_events(&mut self) {
+        self.events.clear();
         self.backend.borrow_mut().events_pump(&mut self.events);
     }
 
@@ -69,7 +71,7 @@ impl Context {
     }
 }
 
-pub fn run_event_loop<T: Game>(
+pub fn run_event_loop<T: Application>(
     backend: impl Backend + 'static,
     load: impl FnOnce(&Context) -> Result<T>,
 ) -> Result {
@@ -77,7 +79,7 @@ pub fn run_event_loop<T: Game>(
 
     let mut context = Context::new(backend);
 
-    let mut game = load(&mut context)?;
+    let mut app = load(&mut context)?;
 
     let mut millis_now = context.millis()?;
     let mut acc_millis = 0;
@@ -101,16 +103,16 @@ pub fn run_event_loop<T: Game>(
             }
         }
 
-        game.update(&mut context, delta_millis)?;
+        app.update(&mut context, delta_millis)?;
 
         if acc_millis >= FIXED_TIMESTEP_MILLIS {
             acc_millis -= FIXED_TIMESTEP_MILLIS;
-            game.fixed_update(&mut context, FIXED_TIMESTEP_MILLIS)?;
+            app.fixed_update(&mut context, FIXED_TIMESTEP_MILLIS)?;
         }
 
         let alpha = acc_millis as f32 / FIXED_TIMESTEP_MILLIS as f32;
 
-        game.draw(&mut context.canvas()?, alpha)?;
+        app.draw(&mut context.canvas()?, alpha)?;
     }
 
     Ok(())

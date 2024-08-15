@@ -342,6 +342,22 @@ impl Backend for BackendSDL2 {
     fn system_get_millis(&mut self) -> Result<u64> {
         Ok(unsafe { SDL_GetTicks64() })
     }
+
+    fn font_load(&mut self, path: &str, scale: f32) -> Result<FontId> {
+        todo!()
+    }
+
+    fn font_destroy(&mut self, id: FontId) -> Result {
+        todo!()
+    }
+
+    fn font_glyph_metrics(&mut self, font: FontId, glyph: char) -> Result<GlyphMetrics> {
+        todo!()
+    }
+
+    fn render_font_glyph(&mut self, origin: Point) -> Result {
+        todo!()
+    }
 }
 
 unsafe fn sdl_error() -> String {

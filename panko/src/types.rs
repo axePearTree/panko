@@ -10,6 +10,13 @@ pub struct TextureData {
     pub height: u32,
 }
 
+#[derive(Copy, Clone, Debug)]
+pub struct FontId(pub ResourceId);
+
+#[derive(Copy, Clone, Debug)]
+pub struct GlyphMetrics {
+}
+
 #[derive(Copy, Clone, Debug, Default)]
 pub struct CopyTextureOptions {
     pub src: Option<Rect>,
