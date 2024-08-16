@@ -14,6 +14,12 @@ pub struct TextureData {
 pub struct FontId(pub ResourceId);
 
 #[derive(Copy, Clone, Debug)]
+pub struct FontData {
+    pub id: FontId,
+    pub glyphs_height: u32,
+}
+
+#[derive(Copy, Clone, Debug)]
 pub struct GlyphMetrics {
 }
 

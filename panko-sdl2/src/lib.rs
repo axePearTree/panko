@@ -343,7 +343,7 @@ impl Backend for BackendSDL2 {
         Ok(unsafe { SDL_GetTicks64() })
     }
 
-    fn font_load(&mut self, path: &str, scale: f32) -> Result<FontId> {
+    fn font_load(&mut self, path: &str, scale: f32) -> Result<FontData> {
         todo!()
     }
 

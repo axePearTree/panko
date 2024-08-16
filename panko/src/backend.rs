@@ -9,7 +9,7 @@ pub trait Backend {
     fn texture_load(&mut self, path: &str) -> Result<TextureData>;
     fn texture_destroy(&mut self, id: TextureId) -> Result;
 
-    fn font_load(&mut self, path: &str, scale: f32) -> Result<FontId>;
+    fn font_load(&mut self, path: &str, scale: f32) -> Result<FontData>;
     fn font_destroy(&mut self, id: FontId) -> Result;
     fn font_glyph_metrics(&mut self, font: FontId, glyph: char) -> Result<GlyphMetrics>;
 
