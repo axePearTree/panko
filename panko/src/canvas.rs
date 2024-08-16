@@ -7,15 +7,15 @@ use alloc::rc::Rc;
 
 pub struct Canvas<'a> {
     backend: BackendRef,
-    target: Option<&'a Texture>,
+    target: Option<&'a mut Texture>,
 }
 
 impl<'a> Canvas<'a> {
-    pub(crate) fn new(backend: &BackendRef, target: Option<&'a Texture>) -> Result<Self> {
+    pub(crate) fn new(backend: &BackendRef, target: Option<&'a mut Texture>) -> Result<Self> {
         let backend = Rc::clone(backend);
         backend
             .borrow_mut()
-            .render_set_target(target.map(|t| t.id))?;
+            .render_set_target(target.as_ref().map(|t| t.id))?;
         Ok(Self { target, backend })
     }
 
@@ -25,14 +25,14 @@ impl<'a> Canvas<'a> {
 
     pub fn with_target(
         &self,
-        target: Option<&Texture>,
+        target: Option<&mut Texture>,
         cb: impl FnOnce(&Canvas) -> Result,
     ) -> Result {
         let canvas = Canvas::new(&self.backend, target)?;
         cb(&canvas)?;
         self.backend
             .borrow_mut()
-            .render_set_target(self.target.map(|t| t.id))?;
+            .render_set_target(self.target.as_ref().map(|t| t.id))?;
         Ok(())
     }
 
