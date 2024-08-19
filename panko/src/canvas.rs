@@ -47,6 +47,10 @@ impl<'a> Canvas<'a> {
             .render_copy_texture(texture.id, options)
     }
 
+    pub fn draw_text(&self, font: &Font, text: &str, position: Point) -> Result {
+        font.draw_text(self, text, position)
+    }
+
     pub fn copy_font_atlas(
         &self,
         font: &Font,
