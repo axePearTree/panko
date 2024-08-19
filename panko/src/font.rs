@@ -1,8 +1,8 @@
 use crate::canvas::Canvas;
 use crate::types::{FontId, GlyphMetrics};
-use crate::{BackendRef, BackendWeakRef, FontData, Point, Rect, Result, Texture, TextureId};
+use crate::{BackendRef, BackendWeakRef, CopyTextureOptions, FontData, Point, Rect, Result, Texture, TextureId};
 use alloc::rc::Rc;
-use alloc::vec::{self, Vec};
+use alloc::vec::Vec;
 use core::cell::RefCell;
 use core::str::Chars;
 use hashbrown::HashMap;
@@ -15,6 +15,10 @@ pub struct Font(RefCell<FontInner>);
 impl Font {
     pub(crate) fn new(backend: &BackendRef, path: &str, scale: f32) -> Result<Self> {
         Ok(Self(RefCell::new(FontInner::new(backend, path, scale)?)))
+    }
+
+    pub(crate) fn draw_text(&self, canvas: &Canvas, text: &str, position: Point) -> Result {
+        self.0.borrow_mut().draw_text(canvas, text, position)
     }
 
     pub(crate) fn atlas(&self, index: usize) -> Option<TextureId> {
@@ -55,8 +59,25 @@ impl FontInner {
         })
     }
 
-    fn draw_text(&mut self, canvas: &Canvas, text: &str, position: Point) -> Result {
-        self.register_glyphs(text, canvas)
+    pub(crate) fn draw_text(&mut self, canvas: &Canvas, text: &str, position: Point) -> Result {
+        self.register_glyphs(text, canvas)?;
+        let mut x_cursor = position.x;
+        for glyph in text.chars() {
+            let entry = self.entries.get(&glyph).unwrap();
+            let atlas = &self.atlases[entry.atlas_index];
+            canvas.copy_texture(&atlas.texture, CopyTextureOptions {
+                src: Some(entry.rect),
+                dest: Some(Rect {
+                    x: x_cursor,
+                    y: position.y,
+                    w: entry.metrics.advance,
+                    h: self.glyphs_height,
+                }),
+                ..Default::default()
+            })?;
+            x_cursor += entry.metrics.advance as i32;
+        }
+        Ok(())
     }
 
     fn register_glyphs(&mut self, text: &str, canvas: &Canvas<'_>) -> Result {
@@ -158,12 +179,14 @@ fn register_glyphs(
                     rect: Rect::new(
                         atlas.x_cursor as i32,
                         atlas.y_cursor as i32,
-                        metrics.width(),
+                        metrics.advance,
                         atlas.glyph_height,
                     ),
                     metrics,
                 },
             );
+
+            atlas.x_cursor += metrics.advance;
         }
         finished = true;
         Ok(())
