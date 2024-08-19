@@ -1,7 +1,8 @@
 use crate::canvas::Canvas;
 use crate::types::{FontId, GlyphMetrics};
-use crate::{BackendWeakRef, Point, Rect, Result, Texture, TextureId};
-use alloc::vec::Vec;
+use crate::{BackendRef, BackendWeakRef, FontData, Point, Rect, Result, Texture, TextureId};
+use alloc::rc::Rc;
+use alloc::vec::{self, Vec};
 use core::cell::RefCell;
 use core::str::Chars;
 use hashbrown::HashMap;
@@ -12,6 +13,10 @@ const ATLAS_HEIGHT: u32 = 1024;
 pub struct Font(RefCell<FontInner>);
 
 impl Font {
+    pub(crate) fn new(backend: &BackendRef, path: &str, scale: f32) -> Result<Self> {
+        Ok(Self(RefCell::new(FontInner::new(backend, path, scale)?)))
+    }
+
     pub(crate) fn atlas(&self, index: usize) -> Option<TextureId> {
         self.0.borrow().atlases.get(index).map(|a| a.texture.id)
     }
@@ -24,13 +29,32 @@ impl Font {
 struct FontInner {
     id: FontId,
     scale: f32,
-    glyph_height: u32,
+    glyphs_height: u32,
     backend: BackendWeakRef,
     atlases: Vec<FontAtlas>,
     entries: HashMap<char, FontGlyphEntry>,
 }
 
 impl FontInner {
+    fn new(backend: &BackendRef, path: &str, scale: f32) -> Result<Self> {
+        let FontData { id, glyphs_height } = backend.borrow_mut().font_load(path, scale)?;
+        let backend = Rc::downgrade(backend);
+        let atlases = vec![FontAtlas::new(
+            &backend,
+            ATLAS_WIDTH,
+            ATLAS_HEIGHT,
+            glyphs_height,
+        )?];
+        Ok(Self {
+            id,
+            scale,
+            glyphs_height,
+            backend,
+            atlases,
+            entries: HashMap::new(),
+        })
+    }
+
     fn draw_text(&mut self, canvas: &Canvas, text: &str, position: Point) -> Result {
         self.register_glyphs(text, canvas)
     }
@@ -40,14 +64,21 @@ impl FontInner {
         let mut atlas_index = self.atlases.len() - 1;
         let mut atlas = &mut self.atlases[atlas_index];
         loop {
-            if register_glyphs(self.id, atlas, canvas, &mut self.entries, &mut glyphs)? {
+            if register_glyphs(
+                self.id,
+                atlas_index,
+                atlas,
+                canvas,
+                &mut self.entries,
+                &mut glyphs,
+            )? {
                 break;
             } else {
                 self.atlases.push(FontAtlas::new(
                     &self.backend,
                     ATLAS_WIDTH,
                     ATLAS_HEIGHT,
-                    self.glyph_height,
+                    self.glyphs_height,
                 )?);
                 atlas_index += 1;
                 atlas = &mut self.atlases[atlas_index];
@@ -87,6 +118,7 @@ impl FontAtlas {
 
 fn register_glyphs(
     font_id: FontId,
+    atlas_index: usize,
     atlas: &mut FontAtlas,
     canvas: &Canvas,
     entries: &mut HashMap<char, FontGlyphEntry>,
@@ -118,6 +150,20 @@ fn register_glyphs(
                 glyph,
                 Point::new(atlas.x_cursor as i32, atlas.y_cursor as i32),
             )?;
+
+            entries.insert(
+                glyph,
+                FontGlyphEntry {
+                    atlas_index,
+                    rect: Rect::new(
+                        atlas.x_cursor as i32,
+                        atlas.y_cursor as i32,
+                        metrics.width(),
+                        atlas.glyph_height,
+                    ),
+                    metrics,
+                },
+            );
         }
         finished = true;
         Ok(())

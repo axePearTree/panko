@@ -1,5 +1,6 @@
 #![no_std]
 
+#[macro_use]
 extern crate alloc;
 
 pub mod backend;
@@ -14,6 +15,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use backend::*;
 use canvas::Canvas;
+use font::Font;
 use core::cell::RefCell;
 use input::InputState;
 use texture::*;
@@ -54,6 +56,10 @@ impl Context {
 
     pub fn create_target(&self, w: u32, h: u32) -> Result<Texture> {
         Texture::new_target(&self.backend, w, h)
+    }
+
+    pub fn load_font(&self, path: &str, scale: f32) -> Result<Font> {
+        Font::new(&self.backend, path, scale)
     }
 
     fn millis(&self) -> Result<u64> {
