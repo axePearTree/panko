@@ -88,6 +88,27 @@ impl BackendSDL2 {
             })
         }
     }
+
+    fn create_raw_sdl_texture(&mut self, w: u32, h: u32) -> Result<*mut SDL_Texture> {
+        unsafe {
+            let texture = SDL_CreateTexture(
+                self.renderer,
+                SDL_PixelFormatEnum::SDL_PIXELFORMAT_ABGR8888 as u32,
+                SDL_TextureAccess::SDL_TEXTUREACCESS_TARGET as c_int,
+                w as c_int,
+                h as c_int,
+            );
+            if texture.is_null() {
+                return Err(sdl_error())?;
+            }
+            if SDL_SetTextureBlendMode(texture, sdl2_sys::SDL_BlendMode::SDL_BLENDMODE_BLEND) < 0 {
+                let error = sdl_error();
+                SDL_DestroyTexture(texture);
+                return Err(error)?;
+            }
+            Ok(texture)
+        }
+    }
 }
 
 impl Backend for BackendSDL2 {
@@ -122,27 +143,7 @@ impl Backend for BackendSDL2 {
     }
 
     fn texture_create(&mut self, w: u32, h: u32) -> Result<TextureData> {
-        let texture = unsafe {
-            let texture = SDL_CreateTexture(
-                self.renderer,
-                SDL_PixelFormatEnum::SDL_PIXELFORMAT_ABGR8888 as u32,
-                SDL_TextureAccess::SDL_TEXTUREACCESS_TARGET as c_int,
-                w as c_int,
-                h as c_int,
-            );
-
-            if texture.is_null() {
-                return Err(sdl_error())?;
-            }
-
-            if SDL_SetTextureBlendMode(texture, sdl2_sys::SDL_BlendMode::SDL_BLENDMODE_BLEND) < 0 {
-                let error = sdl_error();
-                SDL_DestroyTexture(texture);
-                return Err(error)?;
-            }
-
-            texture
-        };
+        let texture = self.create_raw_sdl_texture(w, h)?;
         let id = self.textures.len();
         self.textures.push(Some(texture));
         Ok(TextureData {
@@ -223,7 +224,7 @@ impl Backend for BackendSDL2 {
         let (font, height) = unsafe {
             let font = ttf::TTF_OpenFont(c_str, point_size);
             if font.is_null() {
-                return Err(sdl_error())
+                return Err(sdl_error());
             }
             let height = ttf::TTF_FontHeight(font) as u32;
             (font, height)
@@ -249,7 +250,10 @@ impl Backend for BackendSDL2 {
     }
 
     fn font_glyph_metrics(&mut self, font: FontId, glyph: char) -> Result<GlyphMetrics> {
-        let font = self.fonts.get(font.0 as usize).ok_or(String::from("Font was never registered"))?;
+        let font = self
+            .fonts
+            .get(font.0 as usize)
+            .ok_or(String::from("Font was never registered"))?;
         let font = font.ok_or(String::from("Font was already deleted."))?;
 
         let mut min_x = 0;
@@ -271,7 +275,7 @@ impl Backend for BackendSDL2 {
         };
 
         if ret != 0 {
-            return Err(String::from("Unable to calculate glyph metrics."))
+            return Err(String::from("Unable to calculate glyph metrics."));
         }
 
         Ok(GlyphMetrics {
@@ -400,7 +404,90 @@ impl Backend for BackendSDL2 {
     }
 
     fn render_font_glyph(&mut self, font: FontId, glyph: char, origin: Point) -> Result {
-        todo!()
+        unsafe {
+            let font = self
+                .fonts
+                .get_mut(font.0 as usize)
+                .ok_or(String::from("Font was never created."))?
+                .ok_or(String::from("Font was already deleted."))?;
+
+            // TODO: maybe don't allocate again?
+            let s = CString::new(glyph.to_string()).map_err(|e| e.to_string())?;
+            let glyph_surface = ttf::TTF_RenderUTF8_Blended(
+                font,
+                s.as_ptr(),
+                SDL_Color {
+                    r: 0,
+                    g: 0,
+                    b: 0,
+                    a: 255,
+                },
+            );
+            if (glyph_surface as *mut ()).is_null() {
+                return Err(sdl_error());
+            }
+
+            let surface_ref = &*(glyph_surface as *const _ as *const () as *const SDL_Surface);
+            let surface_format =
+                &*(surface_ref.format as *const _ as *const () as *const SDL_PixelFormat);
+            let dimensions = surface_ref.w.max(surface_ref.h);
+
+            let output_surface = SDL_CreateRGBSurface(
+                0,
+                dimensions as i32,
+                dimensions as i32,
+                surface_format.BitsPerPixel as i32,
+                surface_format.Rmask,
+                surface_format.Gmask,
+                surface_format.Bmask,
+                surface_format.Amask,
+            );
+
+            SDL_FillRect(
+                output_surface,
+                std::ptr::null(),
+                SDL_MapRGBA(surface_ref.format, 0, 0, 0, 0),
+            );
+
+            let mut rect = SDL_Rect {
+                x: 0,
+                y: 0,
+                w: surface_ref.w,
+                h: surface_ref.h,
+            };
+
+            if SDL_UpperBlit(glyph_surface, std::ptr::null(), output_surface, &mut rect) != 0 {
+                let err = sdl_error();
+                SDL_FreeSurface(glyph_surface);
+                SDL_FreeSurface(output_surface);
+                return Err(err);
+            }
+
+            let glyph_texture = SDL_CreateTextureFromSurface(self.renderer, output_surface);
+            if glyph_texture.is_null() {
+                let err = sdl_error();
+                SDL_FreeSurface(glyph_surface);
+                SDL_FreeSurface(output_surface);
+                return Err(err);
+            }
+
+            let dest_rect = SDL_Rect {
+                x: origin.x,
+                y: origin.y,
+                w: surface_ref.w,
+                h: surface_ref.h,
+            };
+
+            if SDL_RenderCopy(self.renderer, glyph_texture, std::ptr::null(), &dest_rect) != 0 {
+                let err = sdl_error();
+                SDL_DestroyTexture(glyph_texture);
+                SDL_FreeSurface(glyph_surface);
+                SDL_FreeSurface(output_surface);
+                return Err(err);
+            }
+        }
+
+        Ok(())
     }
 
     fn events_pump(&mut self, events: &mut Vec<Event>) {

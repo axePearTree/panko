@@ -1,10 +1,9 @@
-use core::cell::RefCell;
-use core::str::Chars;
-
 use crate::canvas::Canvas;
 use crate::types::{FontId, GlyphMetrics};
 use crate::{BackendWeakRef, Point, Rect, Result, Texture, TextureId};
 use alloc::vec::Vec;
+use core::cell::RefCell;
+use core::str::Chars;
 use hashbrown::HashMap;
 
 const ATLAS_WIDTH: u32 = 1024;
