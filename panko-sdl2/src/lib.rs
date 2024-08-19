@@ -14,6 +14,7 @@ pub struct BackendSDL2 {
     window: *mut SDL_Window,
     renderer: *mut SDL_Renderer,
     textures: Vec<Option<*mut SDL_Texture>>,
+    fonts: Vec<Option<*mut ttf::TTF_Font>>,
 }
 
 impl BackendSDL2 {
@@ -83,6 +84,7 @@ impl BackendSDL2 {
                 window,
                 renderer,
                 textures: Vec::with_capacity(32),
+                fonts: Vec::with_capacity(32),
             })
         }
     }
@@ -206,6 +208,81 @@ impl Backend for BackendSDL2 {
         Ok(())
     }
 
+    fn font_load(&mut self, path: &str, scale: f32) -> Result<FontData> {
+        use std::path::Path;
+
+        if !Path::new(path).exists() {
+            return Err(String::from("File does not exist."));
+        }
+
+        let c_str = CString::new(path).map_err(|e| e.to_string())?;
+        let c_str = c_str.as_ptr();
+
+        let point_size = scale as i32;
+
+        let (font, height) = unsafe {
+            let font = ttf::TTF_OpenFont(c_str, point_size);
+            if font.is_null() {
+                return Err(sdl_error())
+            }
+            let height = ttf::TTF_FontHeight(font) as u32;
+            (font, height)
+        };
+
+        let id = self.fonts.len();
+        self.fonts.push(Some(font));
+        Ok(FontData {
+            id: FontId(id as u32),
+            glyphs_height: height,
+        })
+    }
+
+    fn font_destroy(&mut self, id: FontId) -> Result {
+        let Some(font) = self.fonts.get_mut(id.0 as usize) else {
+            return Ok(());
+        };
+        let Some(font) = font.take() else {
+            return Ok(());
+        };
+        unsafe { ttf::TTF_CloseFont(font) };
+        Ok(())
+    }
+
+    fn font_glyph_metrics(&mut self, font: FontId, glyph: char) -> Result<GlyphMetrics> {
+        let font = self.fonts.get(font.0 as usize).ok_or(String::from("Font was never registered"))?;
+        let font = font.ok_or(String::from("Font was already deleted."))?;
+
+        let mut min_x = 0;
+        let mut max_x = 0;
+        let mut min_y = 0;
+        let mut max_y = 0;
+        let mut advance = 0;
+
+        let ret = unsafe {
+            ttf::TTF_GlyphMetrics(
+                font,
+                glyph as u16,
+                &mut min_x,
+                &mut max_x,
+                &mut min_y,
+                &mut max_y,
+                &mut advance,
+            )
+        };
+
+        if ret != 0 {
+            return Err(String::from("Unable to calculate glyph metrics."))
+        }
+
+        Ok(GlyphMetrics {
+            min_x,
+            max_x,
+            min_y,
+            max_y,
+            advance: advance as u32,
+        })
+    }
+
     fn render_set_logical_size(&mut self, w: u32, h: u32) -> Result {
         unsafe {
             if SDL_RenderSetLogicalSize(self.renderer, w as i32, h as i32) != 0 {
@@ -322,6 +399,10 @@ impl Backend for BackendSDL2 {
         Ok(())
     }
 
+    fn render_font_glyph(&mut self, font: FontId, glyph: char, origin: Point) -> Result {
+        todo!()
+    }
+
     fn events_pump(&mut self, events: &mut Vec<Event>) {
         use std::mem::MaybeUninit;
 
@@ -341,22 +422,6 @@ impl Backend for BackendSDL2 {
 
     fn system_get_millis(&mut self) -> Result<u64> {
         Ok(unsafe { SDL_GetTicks64() })
-    }
-
-    fn font_load(&mut self, path: &str, scale: f32) -> Result<FontData> {
-        todo!()
-    }
-
-    fn font_destroy(&mut self, id: FontId) -> Result {
-        todo!()
-    }
-
-    fn font_glyph_metrics(&mut self, font: FontId, glyph: char) -> Result<GlyphMetrics> {
-        todo!()
-    }
-
-    fn render_font_glyph(&mut self, origin: Point) -> Result {
-        todo!()
     }
 }
 

@@ -21,6 +21,21 @@ pub struct FontData {
 
 #[derive(Copy, Clone, Debug)]
 pub struct GlyphMetrics {
+    pub min_x: i32,
+    pub max_x: i32,
+    pub min_y: i32,
+    pub max_y: i32,
+    pub advance: u32,
+}
+
+impl GlyphMetrics {
+    pub fn height(&self) -> u32 {
+        (self.max_x - self.min_x) as u32
+    }
+
+    pub fn width(&self) -> u32 {
+        (self.max_y - self.min_y) as u32
+    }
 }
 
 #[derive(Copy, Clone, Debug, Default)]

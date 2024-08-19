@@ -1,9 +1,14 @@
-use crate::types::CopyTextureOptions;
+use crate::font::Font;
 use crate::texture::Texture;
+use crate::types::CopyTextureOptions;
 use crate::BackendRef;
 use crate::Color;
+use crate::FontId;
+use crate::GlyphMetrics;
+use crate::Point;
 use crate::Result;
 use alloc::rc::Rc;
+use alloc::string::String;
 
 pub struct Canvas<'a> {
     backend: BackendRef,
@@ -37,7 +42,35 @@ impl<'a> Canvas<'a> {
     }
 
     pub fn copy_texture(&self, texture: &Texture, options: CopyTextureOptions) -> Result {
-        self.backend.borrow_mut().render_copy_texture(texture.id, options)
+        self.backend
+            .borrow_mut()
+            .render_copy_texture(texture.id, options)
+    }
+
+    pub fn copy_font_atlas(
+        &self,
+        font: &Font,
+        index: usize,
+        options: CopyTextureOptions,
+    ) -> Result {
+        let atlas_id = font.atlas(index).ok_or(String::from("Atlas not found."))?;
+        self.backend
+            .borrow_mut()
+            .render_copy_texture(atlas_id, options)
+    }
+
+    pub fn register_text(&self, font: &Font, text: &str) -> Result {
+        font.register_text(text, self)
+    }
+
+    pub(crate) fn render_glyph(&self, font_id: FontId, glyph: char, position: Point) -> Result {
+        self.backend
+            .borrow_mut()
+            .render_font_glyph(font_id, glyph, position)
+    }
+
+    pub(crate) fn glyph_metrics(&self, font_id: FontId, glyph: char) -> Result<GlyphMetrics> {
+        self.backend.borrow_mut().font_glyph_metrics(font_id, glyph)
     }
 }
 

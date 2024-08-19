@@ -20,7 +20,7 @@ pub trait Backend {
     fn render_present(&mut self) -> Result;
     fn render_copy_texture(&mut self, texture: TextureId, options: CopyTextureOptions) -> Result;
     fn render_fill_rect(&mut self, rect: Option<Rect>, color: Color) -> Result;
-    fn render_font_glyph(&mut self, origin: Point) -> Result;
+    fn render_font_glyph(&mut self, font: FontId, glyph: char, origin: Point) -> Result;
 
     fn events_pump(&mut self, events: &mut Vec<Event>);
 
