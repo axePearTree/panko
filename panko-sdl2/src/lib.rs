@@ -4,6 +4,7 @@ use panko::Result;
 use sdl2_sys::*;
 use std::ffi::c_char;
 use std::ffi::c_int;
+use std::ffi::CStr;
 use std::ffi::CString;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
@@ -27,6 +28,10 @@ impl BackendSDL2 {
 
         unsafe {
             if SDL_Init(SDL_INIT_VIDEO) < 0 {
+                return Err(sdl_error());
+            }
+
+            if ttf::TTF_Init() < 0 {
                 return Err(sdl_error());
             }
 
@@ -217,18 +222,19 @@ impl Backend for BackendSDL2 {
         }
 
         let c_str = CString::new(path).map_err(|e| e.to_string())?;
-        let c_str = c_str.as_ptr();
+        let c_str_ptr = c_str.as_ptr();
 
         let point_size = scale as i32;
 
         let (font, height) = unsafe {
-            let font = ttf::TTF_OpenFont(c_str, point_size);
-            if font.is_null() {
+            let font = ttf::TTF_OpenFont(c_str_ptr, point_size);
+            if (font as *mut ()).is_null() {
                 return Err(sdl_error());
             }
             let height = ttf::TTF_FontHeight(font) as u32;
             (font, height)
         };
+        drop(c_str);
 
         let id = self.fonts.len();
         self.fonts.push(Some(font));
@@ -403,6 +409,7 @@ impl Backend for BackendSDL2 {
         Ok(())
     }
 
+    #[rustfmt::skip]
     fn render_font_glyph(&mut self, font: FontId, glyph: char, origin: Point) -> Result {
         unsafe {
             let font = self
@@ -416,12 +423,7 @@ impl Backend for BackendSDL2 {
             let glyph_surface = ttf::TTF_RenderUTF8_Blended(
                 font,
                 s.as_ptr(),
-                SDL_Color {
-                    r: 0,
-                    g: 0,
-                    b: 0,
-                    a: 255,
-                },
+                SDL_Color { r: 0, g: 0, b: 0, a: 255 },
             );
             if (glyph_surface as *mut ()).is_null() {
                 return Err(sdl_error());
@@ -443,11 +445,7 @@ impl Backend for BackendSDL2 {
                 surface_format.Amask,
             );
 
-            SDL_FillRect(
-                output_surface,
-                std::ptr::null(),
-                SDL_MapRGBA(surface_ref.format, 0, 0, 0, 0),
-            );
+            SDL_FillRect(output_surface, std::ptr::null(), SDL_MapRGBA(surface_ref.format, 0, 0, 0, 0));
 
             let mut rect = SDL_Rect {
                 x: 0,
@@ -471,20 +469,29 @@ impl Backend for BackendSDL2 {
                 return Err(err);
             }
 
+            let src_rect = SDL_Rect {
+                x: 0,
+                y: 0,
+                w: surface_ref.w,
+                h: surface_ref.h,
+            };
             let dest_rect = SDL_Rect {
                 x: origin.x,
                 y: origin.y,
                 w: surface_ref.w,
                 h: surface_ref.h,
             };
-
-            if SDL_RenderCopy(self.renderer, glyph_texture, std::ptr::null(), &dest_rect) != 0 {
+            if SDL_RenderCopy(self.renderer, glyph_texture, &src_rect, &dest_rect) != 0 {
                 let err = sdl_error();
                 SDL_DestroyTexture(glyph_texture);
                 SDL_FreeSurface(glyph_surface);
                 SDL_FreeSurface(output_surface);
                 return Err(err);
             }
+
+            SDL_DestroyTexture(glyph_texture);
+            SDL_FreeSurface(glyph_surface);
+            SDL_FreeSurface(output_surface);
         }
 
         Ok(())
@@ -514,8 +521,7 @@ impl Backend for BackendSDL2 {
 
 unsafe fn sdl_error() -> String {
     let err = SDL_GetError();
-    let str = CString::from_raw(err as *mut i8);
-    str.to_string_lossy().to_string()
+    CStr::from_ptr(err as *const _).to_str().unwrap().to_owned()
 }
 
 fn rect_to_sdl_rect(rect: Rect) -> SDL_Rect {
