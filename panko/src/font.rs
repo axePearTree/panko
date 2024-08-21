@@ -1,6 +1,6 @@
 use crate::canvas::Canvas;
 use crate::types::{FontId, GlyphMetrics};
-use crate::{BackendRef, BackendWeakRef, CopyTextureOptions, FontData, Point, Rect, Result, Texture, TextureId};
+use crate::{BackendRef, BackendWeakRef, Color, CopyTextureOptions, FontData, Point, Rect, Result, Texture, TextureId};
 use alloc::rc::Rc;
 use alloc::vec::Vec;
 use core::cell::RefCell;
@@ -17,8 +17,8 @@ impl Font {
         Ok(Self(RefCell::new(FontInner::new(backend, path, scale)?)))
     }
 
-    pub(crate) fn draw_text(&self, canvas: &Canvas, text: &str, position: Point) -> Result {
-        self.0.borrow_mut().draw_text(canvas, text, position)
+    pub(crate) fn draw_text(&self, canvas: &Canvas, text: &str, position: Point, color: Color) -> Result {
+        self.0.borrow_mut().draw_text(canvas, text, position, color)
     }
 
     pub(crate) fn atlas(&self, index: usize) -> Option<TextureId> {
@@ -59,7 +59,7 @@ impl FontInner {
         })
     }
 
-    pub(crate) fn draw_text(&mut self, canvas: &Canvas, text: &str, position: Point) -> Result {
+    pub(crate) fn draw_text(&mut self, canvas: &Canvas, text: &str, position: Point, color: Color) -> Result {
         self.register_glyphs(text, canvas)?;
         let mut x_cursor = position.x;
         for glyph in text.chars() {
@@ -73,6 +73,7 @@ impl FontInner {
                     w: entry.metrics.advance,
                     h: self.glyphs_height,
                 }),
+                color_mod: Some(color),
                 ..Default::default()
             })?;
             x_cursor += entry.metrics.advance as i32;
