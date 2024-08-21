@@ -57,7 +57,7 @@ impl Context {
         Texture::new_target(&self.backend, w, h)
     }
 
-    pub fn load_font(&self, path: &str, scale: f32) -> Result<Font> {
+    pub fn load_font(&self, path: &str, scale: u8) -> Result<Font> {
         Font::new(&self.backend, path, scale)
     }
 

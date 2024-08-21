@@ -222,7 +222,7 @@ impl Backend for BackendSDL2 {
         Ok(())
     }
 
-    fn font_load(&mut self, path: &str, scale: f32) -> Result<FontData> {
+    fn font_load(&mut self, path: &str, scale: u8) -> Result<FontData> {
         use std::path::Path;
 
         if !Path::new(path).exists() {
@@ -232,10 +232,8 @@ impl Backend for BackendSDL2 {
         let c_str = CString::new(path).map_err(|e| e.to_string())?;
         let c_str_ptr = c_str.as_ptr();
 
-        let point_size = scale as i32;
-
         let (font, height) = unsafe {
-            let font = ttf::TTF_OpenFont(c_str_ptr, point_size);
+            let font = ttf::TTF_OpenFont(c_str_ptr, scale as i32);
             if (font as *mut ()).is_null() {
                 return Err(sdl_error());
             }
@@ -243,6 +241,7 @@ impl Backend for BackendSDL2 {
             let height = ttf::TTF_FontHeight(font) as u32;
             (font, height)
         };
+
         drop(c_str);
 
         let id = self.fonts.len();
@@ -460,10 +459,40 @@ impl Backend for BackendSDL2 {
             let width = (*glyph_surface).w;
             let height = (*glyph_surface).h;
 
-            // TODO: create a surface with the same dimensions (w == h) and copy the contents from
-            // the glyph to it. SDL might stretch the surface into a texture with these properties.
-            let glyph_texture = SDL_CreateTextureFromSurface(self.renderer, glyph_surface);
-            SDL_SetTextureBlendMode(glyph_texture, SDL_BlendMode::SDL_BLENDMODE_NONE);
+            // we create a surface with the equal dimensions (w == h) and copy the contents from
+            // the glyph to it. SDL might stretch the surface into a texture with width == height
+            // if it's too small.
+            let glyph_texture = {
+                let dimensions = width.max(height) as u32;
+                let pixels = (*glyph_surface).pixels;
+                let pitch = (*glyph_surface).pitch;
+
+                let texture = match self.create_raw_sdl_target_texture(dimensions, dimensions) {
+                    Ok(texture) => texture,
+                    Err(err) => {
+                        SDL_FreeSurface(font_glyph_surface);
+                        SDL_FreeSurface(glyph_surface);
+                        return Err(err);
+                    }
+                };
+
+                let rect = SDL_Rect {
+                    x: 0,
+                    y: 0,
+                    w: width,
+                    h: height,
+                };
+
+                if SDL_SetTextureBlendMode(texture, SDL_BlendMode::SDL_BLENDMODE_NONE) != 0
+                    || SDL_UpdateTexture(texture, &rect, pixels, pitch) != 0
+                {
+                    SDL_FreeSurface(font_glyph_surface);
+                    SDL_FreeSurface(glyph_surface);
+                    return Err(sdl_error());
+                }
+
+                texture
+            };
 
             let src_rect = SDL_Rect {
                 x: 0,

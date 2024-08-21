@@ -13,7 +13,7 @@ const ATLAS_HEIGHT: u32 = 1024;
 pub struct Font(RefCell<FontInner>);
 
 impl Font {
-    pub(crate) fn new(backend: &BackendRef, path: &str, scale: f32) -> Result<Self> {
+    pub(crate) fn new(backend: &BackendRef, path: &str, scale: u8) -> Result<Self> {
         Ok(Self(RefCell::new(FontInner::new(backend, path, scale)?)))
     }
 
@@ -32,7 +32,7 @@ impl Font {
 
 struct FontInner {
     id: FontId,
-    scale: f32,
+    scale: u8,
     glyphs_height: u32,
     backend: BackendWeakRef,
     atlases: Vec<FontAtlas>,
@@ -40,7 +40,7 @@ struct FontInner {
 }
 
 impl FontInner {
-    fn new(backend: &BackendRef, path: &str, scale: f32) -> Result<Self> {
+    fn new(backend: &BackendRef, path: &str, scale: u8) -> Result<Self> {
         let FontData { id, glyphs_height } = backend.borrow_mut().font_load(path, scale)?;
         let backend = Rc::downgrade(backend);
         let atlases = vec![FontAtlas::new(
