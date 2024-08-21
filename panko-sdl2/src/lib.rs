@@ -457,31 +457,14 @@ impl Backend for BackendSDL2 {
                 return Err(sdl_error());
             }
 
+            let width = (*glyph_surface).w;
+            let height = (*glyph_surface).h;
+
+            // TODO: create a surface with the same dimensions (w == h) and copy the contents from
+            // the glyph to it. SDL might stretch the surface into a texture with these properties.
             let glyph_texture = SDL_CreateTextureFromSurface(self.renderer, glyph_surface);
             SDL_SetTextureBlendMode(glyph_texture, SDL_BlendMode::SDL_BLENDMODE_NONE);
 
-            let width = (*glyph_surface).w;
-            let height = (*glyph_surface).h;
-            /*
-            let pixels = (*glyph_surface).pixels;
-            let pitch = (*glyph_surface).pitch;
-            let dimensions = width.max(height);
-            let glyph_texture =
-                match self.create_raw_sdl_target_texture(dimensions as u32, dimensions as u32) {
-                    Ok(texture) => texture,
-                    Err(err) => {
-                        SDL_FreeSurface(glyph_surface);
-                        return Err(err);
-                    }
-                };
-
-            let rect = SDL_Rect {
-                x: 0,
-                y: 0,
-                w: width,
-                h: height,
-            };
-            */
             let src_rect = SDL_Rect {
                 x: 0,
                 y: 0,
@@ -495,8 +478,7 @@ impl Backend for BackendSDL2 {
                 h: height,
             };
 
-            let ok = // SDL_UpdateTexture(glyph_texture, &rect, pixels, pitch) == 0 &&
-                SDL_RenderCopy(self.renderer, glyph_texture, &src_rect, &dest_rect) == 0;
+            let ok = SDL_RenderCopy(self.renderer, glyph_texture, &src_rect, &dest_rect) == 0;
 
             SDL_DestroyTexture(glyph_texture);
             SDL_FreeSurface(font_glyph_surface);
