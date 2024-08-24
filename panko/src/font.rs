@@ -1,6 +1,9 @@
 use crate::canvas::Canvas;
 use crate::types::{FontId, GlyphMetrics};
-use crate::{BackendRef, BackendWeakRef, Color, CopyTextureOptions, FontData, Point, Rect, Result, Texture, TextureId};
+use crate::{
+    BackendRef, BackendWeakRef, Color, CopyTextureOptions, FontData, Point, Rect, Result,
+    TextAlign, TextCrossAlign, TextPadding, Texture, TextureId,
+};
 use alloc::rc::Rc;
 use alloc::vec::Vec;
 use core::cell::RefCell;
@@ -17,8 +20,35 @@ impl Font {
         Ok(Self(RefCell::new(FontInner::new(backend, path, scale)?)))
     }
 
-    pub(crate) fn draw_text(&self, canvas: &Canvas, text: &str, position: Point, color: Color) -> Result {
+    pub(crate) fn draw_text(
+        &self,
+        canvas: &Canvas,
+        text: &str,
+        position: Point,
+        color: Color,
+    ) -> Result {
         self.0.borrow_mut().draw_text(canvas, text, position, color)
+    }
+
+    pub(crate) fn draw_text_bounded(
+        &self,
+        canvas: &Canvas,
+        text: &str,
+        color: Color,
+        rect: Rect,
+        align: TextAlign,
+        cross_align: TextCrossAlign,
+        padding: TextPadding,
+    ) -> Result {
+        self.0.borrow_mut().draw_text_bounded(
+            canvas,
+            text,
+            color,
+            rect,
+            align,
+            cross_align,
+            padding,
+        )
     }
 
     pub(crate) fn atlas(&self, index: usize) -> Option<TextureId> {
@@ -59,25 +89,60 @@ impl FontInner {
         })
     }
 
-    pub(crate) fn draw_text(&mut self, canvas: &Canvas, text: &str, position: Point, color: Color) -> Result {
+    fn draw_text(&mut self, canvas: &Canvas, text: &str, position: Point, color: Color) -> Result {
         self.register_glyphs(text, canvas)?;
-        let mut x_cursor = position.x;
-        for glyph in text.chars() {
-            let entry = self.entries.get(&glyph).unwrap();
-            let atlas = &self.atlases[entry.atlas_index];
-            canvas.copy_texture(&atlas.texture, CopyTextureOptions {
-                src: Some(entry.rect),
-                dest: Some(Rect {
-                    x: x_cursor,
-                    y: position.y,
-                    w: entry.metrics.advance,
-                    h: self.glyphs_height,
-                }),
-                color_mod: Some(color),
-                ..Default::default()
-            })?;
-            x_cursor += entry.metrics.advance as i32;
+        self.draw_line(position, text, canvas, color)?;
+        Ok(())
+    }
+
+    fn draw_text_bounded(
+        &mut self,
+        canvas: &Canvas,
+        text: &str,
+        color: Color,
+        rect: Rect,
+        align: TextAlign,
+        cross_align: TextCrossAlign,
+        padding: TextPadding,
+    ) -> Result {
+        self.register_glyphs(text, canvas)?;
+
+        let inner_rect = Rect {
+            x: rect.x + padding.left as i32,
+            y: rect.y + padding.top as i32,
+            w: rect.w - padding.left as u32 - padding.right as u32,
+            h: rect.h - padding.top as u32 - padding.bottom as u32,
+        };
+
+        let mut lines: Vec<&str> = Vec::new();
+
+        let mut word_start = 0;
+        let mut word_end = 0;
+
+        for (index, glyph) in text.char_indices() {
+            if glyph == ' ' {
+                lines.push(&text[word_start..=word_end]);
+                word_start = index + 1;
+                word_end = index + 1;
+            } else if index == text.len() - 1 {
+                lines.push(&text[word_start..=index]);
+            } else {
+                word_end = index;
+            }
         }
+
+        for line in lines {
+            self.backend.upgrade().unwrap().borrow().system_log(line);
+        }
+
+        /*
+        let mut y_cursor = inner_rect.y;
+        for line in words {
+            self.draw_line(Point::new(inner_rect.x, y_cursor), line, canvas, color)?;
+            y_cursor += self.glyphs_height as i32;
+        }
+        */
+
         Ok(())
     }
 
@@ -107,6 +172,35 @@ impl FontInner {
             }
         }
         Ok(())
+    }
+
+    fn draw_line(
+        &mut self,
+        position: Point,
+        text: &str,
+        canvas: &Canvas<'_>,
+        color: Color,
+    ) -> Result {
+        let mut x_cursor = position.x;
+        Ok(for glyph in text.chars() {
+            let entry = self.entries.get(&glyph).unwrap();
+            let atlas = &self.atlases[entry.atlas_index];
+            canvas.copy_texture(
+                &atlas.texture,
+                CopyTextureOptions {
+                    src: Some(entry.rect),
+                    dest: Some(Rect {
+                        x: x_cursor,
+                        y: position.y,
+                        w: entry.metrics.advance,
+                        h: self.glyphs_height,
+                    }),
+                    color_mod: Some(color),
+                    ..Default::default()
+                },
+            )?;
+            x_cursor += entry.metrics.advance as i32;
+        })
     }
 }
 
@@ -138,6 +232,7 @@ impl FontAtlas {
     }
 }
 
+/// Returns true if all glyphs were successfully registered inside the `FontAtlas`.
 fn register_glyphs(
     font_id: FontId,
     atlas_index: usize,

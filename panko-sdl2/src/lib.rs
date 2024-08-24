@@ -413,9 +413,23 @@ impl Backend for BackendSDL2 {
         let rect = rect
             .as_ref()
             .map_or(std::ptr::null(), |r| r as *const SDL_Rect);
+        self.render_set_draw_color(color)?;
         unsafe {
-            self.render_set_draw_color(color)?;
             if SDL_RenderFillRect(self.renderer, rect) != 0 {
+                return Err(sdl_error());
+            }
+        }
+        Ok(())
+    }
+
+    fn render_draw_rect(&mut self, rect: Option<Rect>, color: Color) -> Result {
+        let rect = rect.map(rect_to_sdl_rect);
+        let rect = rect
+            .as_ref()
+            .map_or(std::ptr::null(), |r| r as *const SDL_Rect);
+        self.render_set_draw_color(color)?;
+        unsafe {
+            if SDL_RenderDrawRect(self.renderer, rect) != 0 {
                 return Err(sdl_error());
             }
         }
@@ -531,7 +545,29 @@ impl Backend for BackendSDL2 {
                 if event.type_ == SDL_EventType::SDL_QUIT as u32 {
                     events.push(Event::Close)
                 } else if event.type_ == SDL_EventType::SDL_KEYDOWN as u32 {
+                    let sym = event.key.keysym.sym as u32;
+
+                    if sym == SDL_KeyCode::SDLK_a as u32 {
+                        events.push(Event::KeyDown(Key::A))
+                    } else if sym == SDL_KeyCode::SDLK_d as u32 {
+                        events.push(Event::KeyDown(Key::D))
+                    } else if sym == SDL_KeyCode::SDLK_w as u32 {
+                        events.push(Event::KeyDown(Key::W))
+                    } else if sym == SDL_KeyCode::SDLK_s as u32 {
+                        events.push(Event::KeyDown(Key::S))
+                    }
                 } else if event.type_ == SDL_EventType::SDL_KEYUP as u32 {
+                    let sym = event.key.keysym.sym as u32;
+
+                    if sym == SDL_KeyCode::SDLK_a as u32 {
+                        events.push(Event::KeyUp(Key::A))
+                    } else if sym == SDL_KeyCode::SDLK_d as u32 {
+                        events.push(Event::KeyUp(Key::D))
+                    } else if sym == SDL_KeyCode::SDLK_w as u32 {
+                        events.push(Event::KeyUp(Key::W))
+                    } else if sym == SDL_KeyCode::SDLK_s as u32 {
+                        events.push(Event::KeyUp(Key::S))
+                    }
                 }
             }
         }
@@ -539,6 +575,10 @@ impl Backend for BackendSDL2 {
 
     fn system_get_millis(&mut self) -> Result<u64> {
         Ok(unsafe { SDL_GetTicks64() })
+    }
+
+    fn system_log(&self, s: &str) {
+        println!("{}", s);
     }
 }
 

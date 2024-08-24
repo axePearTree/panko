@@ -19,6 +19,31 @@ pub struct FontData {
     pub glyphs_height: u32,
 }
 
+#[derive(Copy, Clone, Debug, Default)]
+pub enum TextAlign {
+    #[default]
+    Left,
+    Right,
+    Center,
+    Justified,
+}
+
+#[derive(Copy, Clone, Debug, Default)]
+pub enum TextCrossAlign {
+    #[default]
+    Start,
+    Center,
+    End,
+}
+
+#[derive(Copy, Clone, Debug, Default)]
+pub struct TextPadding {
+    pub left: u16,
+    pub right: u16,
+    pub top: u16,
+    pub bottom: u16,
+}
+
 #[derive(Copy, Clone, Debug)]
 pub struct GlyphMetrics {
     pub min_x: i32,
@@ -101,6 +126,10 @@ pub struct Rect {
 impl Rect {
     pub const fn new(x: i32, y: i32, w: u32, h: u32) -> Self {
         Self { x, y, w, h }
+    }
+
+    pub const fn point(&self) -> Point {
+        Point::new(self.x, self.y)
     }
 }
 

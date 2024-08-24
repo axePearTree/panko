@@ -1,12 +1,10 @@
 use crate::font::Font;
 use crate::texture::Texture;
 use crate::types::CopyTextureOptions;
-use crate::BackendRef;
-use crate::Color;
-use crate::FontId;
-use crate::GlyphMetrics;
-use crate::Point;
-use crate::Result;
+use crate::{
+    BackendRef, Color, FontId, GlyphMetrics, Point, Rect, Result, TextAlign, TextCrossAlign,
+    TextPadding,
+};
 use alloc::rc::Rc;
 use alloc::string::String;
 
@@ -47,8 +45,27 @@ impl<'a> Canvas<'a> {
             .render_copy_texture(texture.id, options)
     }
 
+    pub fn draw_rect(&self, rect: Option<Rect>, color: Color) -> Result {
+        self.backend
+            .borrow_mut()
+            .render_draw_rect(rect, color)
+    }
+
     pub fn draw_text(&self, font: &Font, text: &str, position: Point, color: Color) -> Result {
         font.draw_text(self, text, position, color)
+    }
+
+    pub fn draw_text_bounded(
+        &self,
+        font: &Font,
+        text: &str,
+        color: Color,
+        rect: Rect,
+        align: TextAlign,
+        cross_align: TextCrossAlign,
+        padding: TextPadding,
+    ) -> Result {
+        font.draw_text_bounded(self, text, color, rect, align, cross_align, padding)
     }
 
     pub fn copy_font_atlas(
