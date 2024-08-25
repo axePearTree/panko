@@ -9,6 +9,7 @@ use alloc::vec::Vec;
 use core::cell::RefCell;
 use core::str::Chars;
 use hashbrown::HashMap;
+use std::ops::Range;
 
 const ATLAS_WIDTH: u32 = 1024;
 const ATLAS_HEIGHT: u32 = 1024;
@@ -95,6 +96,7 @@ impl FontInner {
         Ok(())
     }
 
+    /// This is the worst function I've ever wrote. I suck at programming and I'm embarassed.
     fn draw_text_bounded(
         &mut self,
         canvas: &Canvas,
@@ -114,75 +116,96 @@ impl FontInner {
             h: rect.h - padding.top as u32 - padding.bottom as u32,
         };
 
-        enum Cursor {
-            Whitespaces(usize),
-            Word(usize),
-        }
-
         let mut words = Vec::new();
-        let mut cursor = Cursor::Word(0);
+        let mut cursor = 0;
+        let mut is_word_complete = false;
+        let mut seeking_word = true;
 
         for (index, glyph) in text.char_indices() {
-            match &mut cursor {
-                Cursor::Whitespaces(start) => {
-                    if glyph != ' ' {
-                        words.push(&text[*start..index]);
-                        cursor = Cursor::Word(index);
-                    }
+            if seeking_word {
+                is_word_complete = false;
+                if glyph == ' ' {
+                    let word = &text[cursor..index];
+                    let word_width = word
+                        .chars()
+                        .map(|g| self.entries.get(&g).unwrap().metrics.advance)
+                        .sum::<u32>();
+                    words.push((cursor..index, word_width));
+                    cursor = index;
+                    is_word_complete = true;
+                    seeking_word = false;
                 }
-                Cursor::Word(start) => {
-                    if glyph == ' ' {
-                        words.push(&text[*start..index]);
-                        cursor = Cursor::Whitespaces(index);
-                    }
+            } else {
+                is_word_complete = false;
+                if glyph != ' ' {
+                    let word = &text[cursor..index];
+                    let word_width = word
+                        .chars()
+                        .map(|g| self.entries.get(&g).unwrap().metrics.advance)
+                        .sum::<u32>();
+                    words.push((cursor..index, word_width));
+                    cursor = index;
+                    is_word_complete = true;
+                    seeking_word = true;
                 }
             }
         }
 
-        let mut glyph_cursor = inner_rect.point();
-        for word in words {
+        if !is_word_complete {
+            let word = &text[cursor..text.len()];
+            let word_width = word
+                .chars()
+                .map(|g| self.entries.get(&g).unwrap().metrics.advance)
+                .sum::<u32>();
+            words.push((cursor..text.len(), word_width));
+        }
+
+        let mut lines = Vec::new();
+        let mut line_start = 0;
+        let mut line_width = 0;
+        let mut max_line_width = 0;
+
+        for (index, (range, word_width)) in words.iter().enumerate() {
+            let word = &text[range.clone()];
             let word_width = word
                 .chars()
                 .map(|g| self.entries.get(&g).unwrap().metrics.advance)
                 .sum::<u32>();
 
-            if glyph_cursor.x + word_width as i32 > inner_rect.w as i32 {
-                glyph_cursor.x = inner_rect.x;
-                glyph_cursor.y += self.glyphs_height as i32;
-            }
-
-            self.draw_text_line(glyph_cursor, word, canvas, color)?;
-            glyph_cursor.x += word_width as i32;
-        }
-
-        Ok(())
-    }
-
-    fn register_glyphs(&mut self, text: &str, canvas: &Canvas<'_>) -> Result {
-        let mut glyphs = text.chars();
-        let mut atlas_index = self.atlases.len() - 1;
-        let mut atlas = &mut self.atlases[atlas_index];
-        loop {
-            if register_glyphs(
-                self.id,
-                atlas_index,
-                atlas,
-                canvas,
-                &mut self.entries,
-                &mut glyphs,
-            )? {
-                break;
+            if line_width + word_width as i32 > inner_rect.w as i32 {
+                lines.push((&text[line_start..range.start], line_width));
+                line_width = word_width as i32;
+                line_start = range.start;
             } else {
-                self.atlases.push(FontAtlas::new(
-                    &self.backend,
-                    ATLAS_WIDTH,
-                    ATLAS_HEIGHT,
-                    self.glyphs_height,
-                )?);
-                atlas_index += 1;
-                atlas = &mut self.atlases[atlas_index];
+                line_width += word_width as i32;
             }
+
+            if index == words.len() - 1 {
+                lines.push((&text[line_start..range.end], line_width));
+            }
+
+            max_line_width = max_line_width.max(line_width);
         }
+
+        let point_y = match cross_align {
+            TextCrossAlign::Start => inner_rect.y,
+            TextCrossAlign::Center => {
+                inner_rect.y + (lines.len() as u32 * self.glyphs_height) as i32 / 2
+            }
+            TextCrossAlign::End => inner_rect.y + (lines.len() as u32 * self.glyphs_height) as i32,
+        };
+
+        for (index, (line, width)) in lines.iter().enumerate() {
+            let point_x = match align {
+                TextAlign::Left => inner_rect.x,
+                TextAlign::Right => inner_rect.x + (inner_rect.w as i32 - width),
+                TextAlign::Center => inner_rect.x + (inner_rect.w as i32 - width) / 2,
+                TextAlign::Justified => todo!(),
+            };
+            let point = Point::new(point_x, point_y + index as i32 * self.glyphs_height as i32);
+            self.draw_text_line(point, line.trim(), canvas, color)?;
+        }
+
         Ok(())
     }
 
@@ -213,6 +236,34 @@ impl FontInner {
             )?;
             x_cursor += entry.metrics.advance as i32;
         })
+    }
+
+    fn register_glyphs(&mut self, text: &str, canvas: &Canvas<'_>) -> Result {
+        let mut glyphs = text.chars();
+        let mut atlas_index = self.atlases.len() - 1;
+        let mut atlas = &mut self.atlases[atlas_index];
+        loop {
+            if register_glyphs(
+                self.id,
+                atlas_index,
+                atlas,
+                canvas,
+                &mut self.entries,
+                &mut glyphs,
+            )? {
+                break;
+            } else {
+                self.atlases.push(FontAtlas::new(
+                    &self.backend,
+                    ATLAS_WIDTH,
+                    ATLAS_HEIGHT,
+                    self.glyphs_height,
+                )?);
+                atlas_index += 1;
+                atlas = &mut self.atlases[atlas_index];
+            }
+        }
+        Ok(())
     }
 }
 
@@ -301,3 +352,4 @@ fn register_glyphs(
     })?;
     Ok(finished)
 }
+
