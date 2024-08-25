@@ -91,7 +91,7 @@ impl FontInner {
 
     fn draw_text(&mut self, canvas: &Canvas, text: &str, position: Point, color: Color) -> Result {
         self.register_glyphs(text, canvas)?;
-        self.draw_line(position, text, canvas, color)?;
+        self.draw_text_line(position, text, canvas, color)?;
         Ok(())
     }
 
@@ -114,34 +114,46 @@ impl FontInner {
             h: rect.h - padding.top as u32 - padding.bottom as u32,
         };
 
-        let mut lines: Vec<&str> = Vec::new();
+        enum Cursor {
+            Whitespaces(usize),
+            Word(usize),
+        }
 
-        let mut word_start = 0;
-        let mut word_end = 0;
+        let mut words = Vec::new();
+        let mut cursor = Cursor::Word(0);
 
         for (index, glyph) in text.char_indices() {
-            if glyph == ' ' {
-                lines.push(&text[word_start..=word_end]);
-                word_start = index + 1;
-                word_end = index + 1;
-            } else if index == text.len() - 1 {
-                lines.push(&text[word_start..=index]);
-            } else {
-                word_end = index;
+            match &mut cursor {
+                Cursor::Whitespaces(start) => {
+                    if glyph != ' ' {
+                        words.push(&text[*start..index]);
+                        cursor = Cursor::Word(index);
+                    }
+                }
+                Cursor::Word(start) => {
+                    if glyph == ' ' {
+                        words.push(&text[*start..index]);
+                        cursor = Cursor::Whitespaces(index);
+                    }
+                }
             }
         }
 
-        for line in lines {
-            self.backend.upgrade().unwrap().borrow().system_log(line);
-        }
+        let mut glyph_cursor = inner_rect.point();
+        for word in words {
+            let word_width = word
+                .chars()
+                .map(|g| self.entries.get(&g).unwrap().metrics.advance)
+                .sum::<u32>();
 
-        /*
-        let mut y_cursor = inner_rect.y;
-        for line in words {
-            self.draw_line(Point::new(inner_rect.x, y_cursor), line, canvas, color)?;
-            y_cursor += self.glyphs_height as i32;
+            if glyph_cursor.x + word_width as i32 > inner_rect.w as i32 {
+                glyph_cursor.x = inner_rect.x;
+                glyph_cursor.y += self.glyphs_height as i32;
+            }
+
+            self.draw_text_line(glyph_cursor, word, canvas, color)?;
+            glyph_cursor.x += word_width as i32;
         }
-        */
 
         Ok(())
     }
@@ -174,7 +186,7 @@ impl FontInner {
         Ok(())
     }
 
-    fn draw_line(
+    fn draw_text_line(
         &mut self,
         position: Point,
         text: &str,
