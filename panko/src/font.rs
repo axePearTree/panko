@@ -1,6 +1,5 @@
 use crate::canvas::Canvas;
-use crate::text::{BoundedLines, WordOrWhitespace, WordOrWhitespaces};
-use crate::text_v2::BoundedLinesV2;
+use crate::text::BoundedLines;
 use crate::types::{FontId, GlyphMetrics};
 use crate::{
     BackendRef, BackendWeakRef, Color, CopyTextureOptions, FontData, Point, Rect, Result,
@@ -10,7 +9,6 @@ use alloc::rc::Rc;
 use alloc::vec::Vec;
 use core::cell::RefCell;
 use core::ops::Range;
-use core::str::CharIndices;
 use core::str::Chars;
 use hashbrown::HashMap;
 
@@ -122,7 +120,7 @@ impl FontInner {
         };
 
         let lines = text
-            .bounded_lines_v2(inner_rect.w, |c| {
+            .bounded_lines(inner_rect.w, |c| {
                 self.entries.get(&c).unwrap().metrics.advance
             })
             .collect::<Vec<_>>();
