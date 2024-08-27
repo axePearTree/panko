@@ -1,4 +1,5 @@
 use crate::canvas::Canvas;
+use crate::text::{BoundedLines, WordOrWhitespace, WordOrWhitespaces};
 use crate::types::{FontId, GlyphMetrics};
 use crate::{
     BackendRef, BackendWeakRef, Color, CopyTextureOptions, FontData, Point, Rect, Result,
@@ -7,9 +8,10 @@ use crate::{
 use alloc::rc::Rc;
 use alloc::vec::Vec;
 use core::cell::RefCell;
+use core::ops::Range;
+use core::str::CharIndices;
 use core::str::Chars;
 use hashbrown::HashMap;
-use std::ops::Range;
 
 const ATLAS_WIDTH: u32 = 1024;
 const ATLAS_HEIGHT: u32 = 1024;
@@ -68,6 +70,7 @@ struct FontInner {
     backend: BackendWeakRef,
     atlases: Vec<FontAtlas>,
     entries: HashMap<char, FontGlyphEntry>,
+    word_buffer: Vec<(Range<usize>, u32)>,
 }
 
 impl FontInner {
@@ -87,6 +90,7 @@ impl FontInner {
             backend,
             atlases,
             entries: HashMap::new(),
+            word_buffer: Vec::with_capacity(64),
         })
     }
 
@@ -116,94 +120,18 @@ impl FontInner {
             h: rect.h - padding.top as u32 - padding.bottom as u32,
         };
 
-        let mut words = Vec::new();
-        let mut cursor = 0;
-        let mut is_word_complete = false;
-        let mut seeking_word = true;
+        let lines = text
+            .bounded_lines(inner_rect.w, |c| {
+                self.entries.get(&c).unwrap().metrics.advance
+            })
+            .map(|l| (l.line, l.width))
+            .collect::<Vec<_>>();
 
-        for (index, glyph) in text.char_indices() {
-            if seeking_word {
-                is_word_complete = false;
-                if glyph == ' ' {
-                    let word = &text[cursor..index];
-                    let word_width = word
-                        .chars()
-                        .map(|g| self.entries.get(&g).unwrap().metrics.advance)
-                        .sum::<u32>();
-                    words.push((cursor..index, word_width));
-                    cursor = index;
-                    is_word_complete = true;
-                    seeking_word = false;
-                }
-            } else {
-                is_word_complete = false;
-                if glyph != ' ' {
-                    let word = &text[cursor..index];
-                    let word_width = word
-                        .chars()
-                        .map(|g| self.entries.get(&g).unwrap().metrics.advance)
-                        .sum::<u32>();
-                    words.push((cursor..index, word_width));
-                    cursor = index;
-                    is_word_complete = true;
-                    seeking_word = true;
-                }
-            }
-        }
-
-        if !is_word_complete {
-            let word = &text[cursor..text.len()];
-            let word_width = word
-                .chars()
-                .map(|g| self.entries.get(&g).unwrap().metrics.advance)
-                .sum::<u32>();
-            words.push((cursor..text.len(), word_width));
-        }
-
-        let mut lines = Vec::new();
-        let mut line_start = 0;
-        let mut line_width = 0;
-        let mut max_line_width = 0;
-
-        for (index, (range, word_width)) in words.iter().enumerate() {
-            let word = &text[range.clone()];
-            let word_width = word
-                .chars()
-                .map(|g| self.entries.get(&g).unwrap().metrics.advance)
-                .sum::<u32>();
-
-            if line_width + word_width as i32 > inner_rect.w as i32 {
-                lines.push((&text[line_start..range.start], line_width));
-                line_width = word_width as i32;
-                line_start = range.start;
-            } else {
-                line_width += word_width as i32;
-            }
-
-            if index == words.len() - 1 {
-                lines.push((&text[line_start..range.end], line_width));
-            }
-
-            max_line_width = max_line_width.max(line_width);
-        }
-
-        let point_y = match cross_align {
-            TextCrossAlign::Start => inner_rect.y,
-            TextCrossAlign::Center => {
-                inner_rect.y + (lines.len() as u32 * self.glyphs_height) as i32 / 2
-            }
-            TextCrossAlign::End => inner_rect.y + (lines.len() as u32 * self.glyphs_height) as i32,
-        };
-
-        for (index, (line, width)) in lines.iter().enumerate() {
-            let point_x = match align {
-                TextAlign::Left => inner_rect.x,
-                TextAlign::Right => inner_rect.x + (inner_rect.w as i32 - width),
-                TextAlign::Center => inner_rect.x + (inner_rect.w as i32 - width) / 2,
-                TextAlign::Justified => todo!(),
-            };
-            let point = Point::new(point_x, point_y + index as i32 * self.glyphs_height as i32);
-            self.draw_text_line(point, line.trim(), canvas, color)?;
+        let mut y_cursor = 0;
+        let x = inner_rect.x;
+        for (line, _) in lines.iter() {
+            self.draw_text_line(Point::new(x, y_cursor), line, canvas, color)?;
+            y_cursor += self.glyphs_height as i32;
         }
 
         Ok(())

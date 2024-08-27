@@ -8,6 +8,7 @@ pub mod font;
 pub mod input;
 pub mod texture;
 pub mod types;
+mod text;
 
 use alloc::rc::{Rc, Weak};
 use alloc::string::String;
