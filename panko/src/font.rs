@@ -1,5 +1,6 @@
 use crate::canvas::Canvas;
 use crate::text::{BoundedLines, WordOrWhitespace, WordOrWhitespaces};
+use crate::text_v2::BoundedLinesV2;
 use crate::types::{FontId, GlyphMetrics};
 use crate::{
     BackendRef, BackendWeakRef, Color, CopyTextureOptions, FontData, Point, Rect, Result,
@@ -121,10 +122,9 @@ impl FontInner {
         };
 
         let lines = text
-            .bounded_lines(inner_rect.w, |c| {
+            .bounded_lines_v2(inner_rect.w, |c| {
                 self.entries.get(&c).unwrap().metrics.advance
             })
-            .map(|l| (l.line, l.width))
             .collect::<Vec<_>>();
 
         let mut y_cursor = 0;
