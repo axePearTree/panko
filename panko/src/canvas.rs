@@ -80,6 +80,10 @@ impl<'a> Canvas<'a> {
             .render_copy_texture(atlas_id, options)
     }
 
+    pub fn text_width(&self, font: &Font, text: &str) -> Result<u32> {
+        font.line_width(text, self)
+    }
+
     pub fn register_text(&self, font: &Font, text: &str) -> Result {
         font.register_text(text, self)
     }

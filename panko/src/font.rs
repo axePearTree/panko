@@ -60,6 +60,10 @@ impl Font {
     pub(crate) fn register_text(&self, text: &str, canvas: &Canvas) -> Result {
         self.0.borrow_mut().register_glyphs(text, canvas)
     }
+
+    pub(crate) fn line_width(&self, text: &str, canvas: &Canvas) -> Result<u32> {
+        self.0.borrow_mut().line_width(text, canvas)
+    }
 }
 
 struct FontInner {
@@ -69,7 +73,6 @@ struct FontInner {
     backend: BackendWeakRef,
     atlases: Vec<FontAtlas>,
     entries: HashMap<char, FontGlyphEntry>,
-    word_buffer: Vec<(Range<usize>, u32)>,
 }
 
 impl FontInner {
@@ -89,7 +92,6 @@ impl FontInner {
             backend,
             atlases,
             entries: HashMap::new(),
-            word_buffer: Vec::with_capacity(64),
         })
     }
 
@@ -99,7 +101,6 @@ impl FontInner {
         Ok(())
     }
 
-    /// This is the worst function I've ever wrote. I suck at programming and I'm embarassed.
     fn draw_text_bounded(
         &mut self,
         canvas: &Canvas,
@@ -127,6 +128,7 @@ impl FontInner {
 
         let mut y_cursor = 0;
         let x = inner_rect.x;
+
         for (line, _) in lines.iter() {
             self.draw_text_line(Point::new(x, y_cursor), line, canvas, color)?;
             y_cursor += self.glyphs_height as i32;
@@ -162,6 +164,15 @@ impl FontInner {
             )?;
             x_cursor += entry.metrics.advance as i32;
         })
+    }
+
+    fn line_width(&mut self, text: &str, canvas: &Canvas<'_>) -> Result<u32> {
+        self.register_glyphs(text, canvas)?;
+        let width = text
+            .chars()
+            .map(|c| self.entries.get(&c).unwrap().metrics.advance)
+            .sum::<u32>();
+        Ok(width)
     }
 
     fn register_glyphs(&mut self, text: &str, canvas: &Canvas<'_>) -> Result {
@@ -204,7 +215,6 @@ struct FontAtlas {
     glyph_height: u32,
     x_cursor: u32,
     y_cursor: u32,
-    full: bool,
 }
 
 impl FontAtlas {
@@ -216,7 +226,6 @@ impl FontAtlas {
             glyph_height,
             x_cursor: 0,
             y_cursor: 0,
-            full: false,
         })
     }
 }
@@ -278,4 +287,3 @@ fn register_glyphs(
     })?;
     Ok(finished)
 }
-
