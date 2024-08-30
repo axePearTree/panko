@@ -63,11 +63,16 @@ where
                     }
                     let word = &self.text[self.word_start..i];
                     let word_width: u32 = word.chars().map(&mut self.char_width).sum();
-                    let will_overflow = self.line_width + word_width >= self.max_width;
-                    if will_overflow {
+                    let is_line_break = self.line_width + word_width > self.max_width;
+                    if is_line_break {
                         let line = &self.text[self.line_start..self.line_end];
                         let width = self.line_width;
-                        self.line_start = self.word_start;
+                        // workaround for bounds that are smaller than a single whitespace...
+                        self.line_start = if word.chars().next().unwrap() == ' ' {
+                            self.word_start + 1
+                        } else {
+                            self.word_start
+                        };
                         self.line_end = i;
                         self.line_width = word_width;
                         self.word_start = i;
