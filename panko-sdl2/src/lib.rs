@@ -36,14 +36,18 @@ impl BackendSDL2 {
             }
 
             let (window_width, window_height) = match config {
-                WindowConfig::Bordered(physical_size) | WindowConfig::Borderless(physical_size) => {
+                WindowConfig::Bordered {
+                    size: physical_size,
+                    ..
+                }
+                | WindowConfig::Borderless(physical_size) => {
                     (physical_size.width, physical_size.height)
                 }
                 WindowConfig::Fullscreen { .. } => (0, 0),
             };
 
             let window_flags = match config {
-                WindowConfig::Bordered(..) => SDL_WindowFlags::SDL_WINDOW_SHOWN,
+                WindowConfig::Bordered { .. } => SDL_WindowFlags::SDL_WINDOW_SHOWN,
                 WindowConfig::Borderless(..) => SDL_WindowFlags::SDL_WINDOW_BORDERLESS,
                 WindowConfig::Fullscreen { .. } => SDL_WindowFlags::SDL_WINDOW_FULLSCREEN,
             };
@@ -59,6 +63,13 @@ impl BackendSDL2 {
 
             if window.is_null() {
                 return Err(sdl_error());
+            }
+
+            match config {
+                WindowConfig::Bordered { resizable, .. } => {
+                    SDL_SetWindowResizable(window, if resizable { SDL_bool::SDL_TRUE } else { SDL_bool::SDL_FALSE });
+                },
+                _ => {}
             }
 
             let renderer = SDL_CreateRenderer(
@@ -127,7 +138,11 @@ impl BackendSDL2 {
 impl Backend for BackendSDL2 {
     fn window_set_config(&mut self, config: WindowConfig) -> Result {
         let (window_width, window_height) = match config {
-            WindowConfig::Bordered(physical_size) | WindowConfig::Borderless(physical_size) => {
+            WindowConfig::Bordered {
+                size: physical_size,
+                ..
+            }
+            | WindowConfig::Borderless(physical_size) => {
                 (physical_size.width, physical_size.height)
             }
             WindowConfig::Fullscreen { .. } => (0, 0),
@@ -135,9 +150,10 @@ impl Backend for BackendSDL2 {
 
         unsafe {
             match config {
-                WindowConfig::Bordered(..) => {
+                WindowConfig::Bordered { resizable, .. } => {
                     SDL_SetWindowSize(self.window, window_width as c_int, window_height as c_int);
                     SDL_SetWindowBordered(self.window, SDL_bool::SDL_TRUE);
+                    SDL_SetWindowResizable(self.window, if resizable { SDL_bool::SDL_TRUE } else { SDL_bool::SDL_FALSE });
                 }
                 WindowConfig::Borderless(..) => {
                     SDL_SetWindowSize(self.window, window_width as c_int, window_height as c_int);

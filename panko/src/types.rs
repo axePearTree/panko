@@ -77,7 +77,10 @@ pub struct CopyTextureOptions {
 #[derive(Copy, Clone, Debug)]
 pub enum WindowConfig {
     Borderless(Dimensions),
-    Bordered(Dimensions),
+    Bordered {
+        size: Dimensions,
+        resizable: bool,
+    },
     Fullscreen,
 }
 
