@@ -67,8 +67,15 @@ impl BackendSDL2 {
 
             match config {
                 WindowConfig::Bordered { resizable, .. } => {
-                    SDL_SetWindowResizable(window, if resizable { SDL_bool::SDL_TRUE } else { SDL_bool::SDL_FALSE });
-                },
+                    SDL_SetWindowResizable(
+                        window,
+                        if resizable {
+                            SDL_bool::SDL_TRUE
+                        } else {
+                            SDL_bool::SDL_FALSE
+                        },
+                    );
+                }
                 _ => {}
             }
 
@@ -153,7 +160,14 @@ impl Backend for BackendSDL2 {
                 WindowConfig::Bordered { resizable, .. } => {
                     SDL_SetWindowSize(self.window, window_width as c_int, window_height as c_int);
                     SDL_SetWindowBordered(self.window, SDL_bool::SDL_TRUE);
-                    SDL_SetWindowResizable(self.window, if resizable { SDL_bool::SDL_TRUE } else { SDL_bool::SDL_FALSE });
+                    SDL_SetWindowResizable(
+                        self.window,
+                        if resizable {
+                            SDL_bool::SDL_TRUE
+                        } else {
+                            SDL_bool::SDL_FALSE
+                        },
+                    );
                 }
                 WindowConfig::Borderless(..) => {
                     SDL_SetWindowSize(self.window, window_width as c_int, window_height as c_int);
@@ -595,6 +609,23 @@ impl Backend for BackendSDL2 {
 
     fn system_log(&self, s: &str) {
         println!("{}", s);
+    }
+}
+
+impl Drop for BackendSDL2 {
+    fn drop(&mut self) {
+        for texture in self.textures.iter_mut() {
+            let Some(texture) = texture.take() else {
+                continue;
+            };
+            unsafe { SDL_DestroyTexture(texture) };
+        }
+        for font in self.fonts.iter_mut() {
+            let Some(font) = font.take() else {
+                continue;
+            };
+            unsafe { ttf::TTF_CloseFont(font) };
+        }
     }
 }
 
