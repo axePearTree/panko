@@ -25,6 +25,8 @@ pub trait Backend {
 
     fn events_pump(&mut self, events: &mut Vec<Event>);
 
+    fn input_mouse_position(&mut self) -> Result<(i32, i32)>;
+
     fn system_get_millis(&mut self) -> Result<u64>;
     fn system_log(&self, s: &str);
 }

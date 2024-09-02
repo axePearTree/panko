@@ -1,4 +1,3 @@
-
 #[macro_use]
 extern crate alloc;
 
@@ -6,17 +5,17 @@ pub mod backend;
 pub mod canvas;
 pub mod font;
 pub mod input;
+mod text;
 pub mod texture;
 pub mod types;
-mod text;
 
 use alloc::rc::{Rc, Weak};
 use alloc::string::String;
 use alloc::vec::Vec;
 use backend::*;
 use canvas::Canvas;
-use font::Font;
 use core::cell::RefCell;
+use font::Font;
 use input::InputState;
 use texture::*;
 use types::*;
@@ -77,6 +76,12 @@ impl Context {
         self.backend.borrow_mut().events_pump(&mut self.events);
     }
 
+    fn update_mouse_position(&mut self) -> Result {
+        let pos = self.backend.borrow_mut().input_mouse_position()?;
+        self.input.mouse.set_position(pos.0, pos.1);
+        Ok(())
+    }
+
     fn canvas(&self) -> Result<Canvas> {
         self.backend.borrow_mut().render_clear()?;
         Canvas::new(&self.backend, None)
@@ -107,13 +112,18 @@ pub fn run_event_loop<T: Application>(
         let delta_millis = millis_now - millis_before;
         acc_millis += delta_millis;
 
+        context.update_mouse_position()?;
         context.input.keyboard.clear_memory();
+        context.input.mouse.clear_memory();
         context.refresh_events();
         for event in context.events.iter() {
             #[allow(unreachable_patterns)]
             match event {
                 Event::KeyDown(key) => context.input.keyboard.on_key_down(*key),
                 Event::KeyUp(key) => context.input.keyboard.on_key_up(*key),
+                Event::MouseDown => context.input.mouse.on_down(),
+                Event::MouseUp => context.input.mouse.on_up(),
+                Event::MouseDoubleClick => context.input.mouse.on_double_click(),
                 Event::Close => break 'game_loop,
                 _ => {}
             }

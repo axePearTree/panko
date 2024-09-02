@@ -598,6 +598,13 @@ impl Backend for BackendSDL2 {
                     } else if sym == SDL_KeyCode::SDLK_s as u32 {
                         events.push(Event::KeyUp(Key::S))
                     }
+                } else if event.type_ == SDL_EventType::SDL_MOUSEBUTTONDOWN as u32 {
+                    events.push(Event::MouseDown);
+                    if event.button.clicks > 1 {
+                        events.push(Event::MouseDoubleClick);
+                    }
+                } else if event.type_ == SDL_EventType::SDL_MOUSEBUTTONUP as u32 {
+                    events.push(Event::MouseUp);
                 }
             }
         }
@@ -609,6 +616,13 @@ impl Backend for BackendSDL2 {
 
     fn system_log(&self, s: &str) {
         println!("{}", s);
+    }
+
+    fn input_mouse_position(&mut self) -> Result<(i32, i32)> {
+        let mut x = 0;
+        let mut y = 0;
+        unsafe { SDL_GetMouseState(&mut x, &mut y) };
+        Ok((x, y))
     }
 }
 

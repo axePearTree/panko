@@ -94,6 +94,9 @@ pub struct Dimensions {
 pub enum Event {
     KeyDown(Key),
     KeyUp(Key),
+    MouseDown,
+    MouseUp,
+    MouseDoubleClick,
     Close,
 }
 

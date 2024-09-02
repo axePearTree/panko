@@ -3,6 +3,7 @@ use crate::Key;
 #[derive(Clone, Debug, Default)]
 pub struct InputState {
     pub keyboard: KeyboardState,
+    pub mouse: MouseState,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -10,8 +11,9 @@ pub struct KeyboardState {
     keys: [KeyState; Key::Count as usize],
 }
 
+// TODO: instead of 3 bools let's use a single byte with bitflags and reduce the size of this struct
 #[derive(Copy, Clone, Debug, Default)]
-pub struct KeyState {
+struct KeyState {
     down: bool,
     just_down: bool,
     just_up: bool,
@@ -51,6 +53,79 @@ impl KeyboardState {
         self.keys[key as usize].down = false;
         self.keys[key as usize].just_down = false;
         self.keys[key as usize].just_up = false;
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct MouseState {
+    position: (i32, i32),
+    down: bool,
+    just_down: bool,
+    just_up: bool,
+    double_click: bool,
+}
+
+impl MouseState {
+    pub fn x(&self) -> i32 {
+        self.position.0
+    }
+
+    pub fn y(&self) -> i32 {
+        self.position.1
+    }
+
+    #[inline]
+    pub fn is_down(&self) -> bool {
+        self.down
+    }
+
+    #[inline]
+    pub fn is_up(&self) -> bool {
+        !self.down
+    }
+
+    #[inline]
+    pub fn is_just_down(&self) -> bool {
+        self.just_down
+    }
+
+    #[inline]
+    pub fn is_just_up(&self) -> bool {
+        self.just_up
+    }
+
+    #[inline]
+    pub fn is_double_click(&self) -> bool {
+        self.double_click
+    }
+
+    pub(crate) fn clear_memory(&mut self) {
+        self.just_down = false;
+        self.just_up = false;
+        self.double_click = false;
+    }
+
+    pub(crate) fn set_position(&mut self, x: i32, y: i32) {
+        self.position = (x, y);
+    }
+
+    pub(crate) fn on_down(&mut self) {
+        self.down = true;
+        self.just_down = true;
+        self.just_up = false;
+    }
+
+    pub(crate) fn on_up(&mut self) {
+        self.down = false;
+        self.just_down = false;
+        self.just_up = true;
+    }
+
+    pub(crate) fn on_double_click(&mut self) {
+        self.down = false;
+        self.just_down = false;
+        self.just_up = true;
+        self.double_click = true;
     }
 }
 
